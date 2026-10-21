@@ -1,0 +1,6 @@
+@TemanBicaraAPI_HostAddress = http://localhost:5210
+
+GET {{TemanBicaraAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -7,3 +7,12 @@
 _ReSharper*/
 *.ReSharper
 *.ReSharper.user
+
+# Visual Studio local files
+.vs/
+*.user
+*.suo
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
