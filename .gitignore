@@ -1,0 +1,9 @@
+# JetBrains Rider / ReSharper
+.idea/
+.run/
+*.sln.iml
+*.DotSettings
+*.DotSettings.user
+_ReSharper*/
+*.ReSharper
+*.ReSharper.user
