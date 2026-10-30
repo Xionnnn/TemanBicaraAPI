@@ -1,3 +1,9 @@
 <Solution>
-  <Project Path="TemanBicaraAPI.csproj" />
+  <Project Path="TemanBicaraAPI.Contracts/TemanBicaraAPI.Contracts.csproj" />
+  <Project Path="TemanBicaraAPI.Entities/TemanBicaraAPI.Entities.csproj" />
+  <Project Path="TemanBicaraAPI.MobileAPI/TemanBicaraAPI.MobileAPI.csproj" />
+  <Project Path="TemanBicaraAPI/TemanBicaraAPI.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/AuthChecks/AuthChecks.csproj" />
+  </Folder>
 </Solution>
