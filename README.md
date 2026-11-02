@@ -14,10 +14,21 @@ aborts when affected records exist; it does not reset data or migrate populated 
 It converts account IDs and dependent foreign keys to UUID, seeds the two roles, and
 adds verification state plus `users.auth_version`. PECS sessions remain activity records.
 
-Copy the *settings* in `TemanBicaraAPI.MobileAPI/appsettings.Auth.example.json` into .NET user secrets or environment
-variables, replacing every placeholder. The example is not loaded automatically. The
-project uses UserSecretsId `TemanBicaraAPI-LocalDevelopment`. Do not commit credentials.
-Environment keys use `__`, for example `ConnectionStrings__ColdDb` and `Smtp__Host`.
+Configure `TemanBicaraAPI.MobileAPI/appsettings.json` for the database, authentication,
+and SMTP settings. This real configuration file is kept locally and ignored by Git.
+On a fresh checkout, copy `appsettings.Auth.example.json` in the same directory to
+`appsettings.json`, then replace the placeholders. The example is not loaded automatically.
+
+ASP.NET Core loads configuration using its standard defaults. Later sources override
+matching keys: appsettings.json, appsettings.{Environment}.json, Development user secrets,
+environment variables, then command-line arguments. There is no custom configuration helper.
+User secrets under `TemanBicaraAPI-LocalDevelopment` remain unchanged; remove duplicate keys
+yourself if you want the appsettings.json values to take effect during Development.
+Environment keys use `__`, for example `ConnectionStrings__ColdDb`.
+
+The real appsettings.json is included by normal .NET build/publish behavior. Keep published
+artifacts containing credentials private, or supply production values through environment
+variables and a suitable deployment settings file. Do not commit credentials.
 
 - `Auth:VerificationHashKey`: Base64 of at least 32 cryptographically random bytes.
 - `Auth:KeyRingPath`: persistent directory accessible only to the API identity, outside Git.
@@ -138,7 +149,8 @@ To check live mappings without writing data:
 dotnet run --project tests/AuthChecks/AuthChecks.csproj --no-launch-profile -- --live-schema
 ```
 
-This uses ColdDb user secrets and performs read-only queries against all eight public
+This uses the standard appsettings files, Development user secrets, environment variables,
+and command-line settings in that priority order, and performs read-only queries against all eight public
 application tables and authentication columns. It does not replace external SMTP or mobile
 device verification. No test credentials are inserted into the shared Cold DB.
 

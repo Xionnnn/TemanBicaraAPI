@@ -30,8 +30,20 @@ using System.Text;
 
 if (args.Contains("--live-schema"))
 {
-    var liveConfig = new ConfigurationBuilder().AddUserSecrets("TemanBicaraAPI-LocalDevelopment")
-        .AddEnvironmentVariables().Build();
+    var schemaRepository = new DirectoryInfo(AppContext.BaseDirectory);
+    while (schemaRepository is not null && !File.Exists(Path.Combine(schemaRepository.FullName, "TemanBicaraAPI.slnx")))
+        schemaRepository = schemaRepository.Parent;
+    if (schemaRepository is null) throw new InvalidOperationException("Run the schema check from the repository build.");
+    var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+        ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+    var configuration = new ConfigurationBuilder()
+        .SetBasePath(Path.Combine(schemaRepository.FullName, "TemanBicaraAPI.MobileAPI"))
+        .AddJsonFile("appsettings.json", optional: false)
+        .AddJsonFile($"appsettings.{environment}.json", optional: true);
+    if (environment == "Development") configuration.AddUserSecrets("TemanBicaraAPI-LocalDevelopment");
+    var liveConfig = configuration.AddEnvironmentVariables()
+        .AddCommandLine(args.Where(a => a != "--live-schema").ToArray()).Build();
+    using var configurationLifetime = liveConfig as IDisposable;
     var liveConnection = liveConfig.GetConnectionString("ColdDb")
         ?? throw new InvalidOperationException("Configure ConnectionStrings:ColdDb for the read-only schema check.");
     await using var liveDb = new TemanBicaraDbContext(new DbContextOptionsBuilder<TemanBicaraDbContext>()

@@ -16,3 +16,5 @@ _ReSharper*/
 # .NET build output
 [Bb]in/
 [Oo]bj/
+
+/TemanBicaraAPI.MobileAPI/appsettings.json

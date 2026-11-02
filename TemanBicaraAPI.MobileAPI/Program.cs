@@ -15,7 +15,7 @@ using TemanBicaraAPI.MobileAPI.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 var connection = builder.Configuration.GetConnectionString("ColdDb")
-    ?? throw new InvalidOperationException("Set ConnectionStrings:ColdDb using server secrets.");
+    ?? throw new InvalidOperationException("Configure ConnectionStrings:ColdDb in appsettings.json, user secrets, or environment variables.");
 var key = builder.Configuration["Auth:VerificationHashKey"];
 if (string.IsNullOrWhiteSpace(key) || Convert.FromBase64String(key).Length < 32)
     throw new InvalidOperationException("Auth:VerificationHashKey must be at least 32 random bytes encoded as Base64.");
