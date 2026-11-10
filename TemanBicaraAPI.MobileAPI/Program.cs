@@ -39,6 +39,7 @@ builder.Services.AddScoped<IPasswordHasher<UserAccount>, PasswordHasher<UserAcco
 builder.Services.AddSingleton<CredentialProtector>();
 builder.Services.AddScoped<CredentialAuthentication>();
 builder.Services.AddScoped<VerificationCodes>();
+builder.Services.AddScoped<PasswordRecovery>();
 builder.Services.AddAuthentication(BearerHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, BearerHandler>(BearerHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization();

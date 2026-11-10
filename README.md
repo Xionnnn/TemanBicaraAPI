@@ -45,6 +45,10 @@ own localhost. No database connection string belongs in the mobile app.
 
 ## HTTP contract
 
+Password recovery is documented in [PasswordRecovery.md](docs/PasswordRecovery.md).
+Before using it, apply the additive `TemanBicaraAPI.MobileAPI/Database/002-password-recovery.sql`
+migration. It adds a separate recovery table and preserves existing accounts.
+
 All paths are prefixed `/auth`. JSON uses camelCase.
 
 | Method / path | Input | Success |
@@ -55,6 +59,9 @@ All paths are prefixed `/auth`. JSON uses camelCase.
 | POST login | username, password | 200 credential, account (`id`, `username`, `role`) |
 | GET me | Bearer credential | 200 current account |
 | POST logout | Bearer credential | 204 |
+| POST forgot-password | registered email | 202 recoveryTicket, masked email, resendAfter |
+| POST verify-password-reset | recoveryTicket, six-digit code | 200 resetToken, expiresIn |
+| POST reset-password | resetToken, password, confirmPassword | 204; prior credentials invalidated |
 
 Errors include `code` and an Indonesian `message`. Validation errors include `errors`.
 Unverified login returns 403 `verification_required` and a new verification ticket.
@@ -137,7 +144,7 @@ dotnet run --project tests/AuthChecks/AuthChecks.csproj --no-launch-profile
 docker stop temanbicara-auth-tests
 ```
 
-The 75 checks cover PostgreSQL-backed handlers, validation, persisted credentials, legacy
+The checks cover PostgreSQL-backed handlers, validation, persisted credentials, legacy
 payload compatibility, concurrent verification/resend/logout, authentication HTTP endpoints,
 and MailKit delivery to a loopback SMTP capture server. Each handler/HTTP request gets its
 own DbContext. The fixture omits Supabase-managed extensions and creates the application

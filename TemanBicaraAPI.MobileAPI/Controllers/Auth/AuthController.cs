@@ -32,6 +32,21 @@ public sealed class AuthController(IMediator mediator) : ControllerBase
     public async Task<IActionResult> Me(CancellationToken ct) => Ok(await mediator.Send(
         new GetCurrentAccountRequest(Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!)), ct));
 
+    [HttpPost("forgot-password"), AllowAnonymous, EnableRateLimiting("auth")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken ct) =>
+        Accepted(await mediator.Send(request, ct));
+
+    [HttpPost("verify-password-reset"), AllowAnonymous, EnableRateLimiting("auth")]
+    public async Task<IActionResult> VerifyPasswordReset(VerifyPasswordResetRequest request, CancellationToken ct) =>
+        Ok(await mediator.Send(request, ct));
+
+    [HttpPost("reset-password"), AllowAnonymous, EnableRateLimiting("auth")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken ct)
+    {
+        await mediator.Send(request, ct);
+        return NoContent();
+    }
+
     [HttpPost("logout"), Authorize]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {

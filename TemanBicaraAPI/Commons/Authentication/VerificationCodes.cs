@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using MailKit.Net.Smtp;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using TemanBicaraAPI.Commons.Exceptions;
 using TemanBicaraAPI.Commons.Services;
 using TemanBicaraAPI.Contracts.ResponseModels.Auth;
@@ -10,7 +12,7 @@ using TemanBicaraAPI.Entities;
 namespace TemanBicaraAPI.Commons.Authentication;
 
 public sealed class VerificationCodes(TemanBicaraDbContext db, CredentialProtector credentials,
-    IVerificationEmail email, IConfiguration configuration, TimeProvider clock)
+    IVerificationEmail email, IConfiguration configuration, TimeProvider clock, ILogger<VerificationCodes> logger)
 {
     public string HashCode(Guid id, string code) => Convert.ToHexString(HMACSHA256.HashData(
         Convert.FromBase64String(configuration["Auth:VerificationHashKey"]!), Encoding.UTF8.GetBytes($"{id:D}:{code}")));
@@ -47,6 +49,21 @@ public sealed class VerificationCodes(TemanBicaraDbContext db, CredentialProtect
         try { await email.Send(user.Email, code, ct); }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            var detail = ex.Message;
+            var from = configuration["Smtp:From"];
+            MimeKit.MailboxAddress? sender = null;
+            if (!string.IsNullOrWhiteSpace(from)) MimeKit.MailboxAddress.TryParse(from, out sender);
+            foreach (var sensitive in new[] { code, user.Email, configuration["Smtp:Password"],
+                configuration["Smtp:Username"], from, sender?.Address }.OrderByDescending(value => value?.Length ?? 0))
+                if (!string.IsNullOrEmpty(sensitive))
+                    detail = detail.Replace(sensitive, "[redacted]", StringComparison.OrdinalIgnoreCase);
+            detail = detail.Replace('\r', ' ').Replace('\n', ' ');
+            if (detail.Length > 2000) detail = detail[..2000];
+            var smtp = ex as SmtpCommandException;
+            logger.LogWarning("Verification email delivery failed. ExceptionType={ExceptionType}; " +
+                "InnerExceptionType={InnerExceptionType}; SmtpStatus={SmtpStatus}; SmtpError={SmtpError}; Detail={Detail}",
+                ex.GetType().Name, ex.InnerException?.GetType().Name,
+                smtp is null ? null : (int?)smtp.StatusCode, smtp?.ErrorCode.ToString(), detail);
             throw new AuthProblem(503, new("email_delivery_failed", "Email belum terkirim. Coba kirim ulang kode.",
                 response.VerificationTicket, response.Email, response.ResendAfter));
         }

@@ -6,7 +6,7 @@ public sealed class RegisterValidator : AbstractValidator<RegisterRequest>
     public RegisterValidator()
     {
         RuleFor(r => r.Username).NotEmpty().Matches(@"^[A-Za-z0-9_]{3,32}$");
-        RuleFor(r => r.Password).NotEmpty().MinimumLength(15).MaximumLength(128);
+        RuleFor(r => r.Password).NotEmpty().MinimumLength(12).MaximumLength(128);
         RuleFor(r => r.ConfirmPassword).NotEmpty();
         RuleFor(r => r.Email).NotEmpty().MaximumLength(254).Must(value =>
             new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(value));
