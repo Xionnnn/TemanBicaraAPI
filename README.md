@@ -72,7 +72,7 @@ Resend failures can include `resendAfter`. Incorrect login uses a generic 401 re
 Codes are six digits, valid for 10 minutes, with five failed attempts and a 60-second
 resend cooldown. Tickets expire in 30 minutes. Code hashes are HMAC-SHA256 and passwords
 use ASP.NET Core PasswordHasher. Username is 3–32 ASCII letters/digits/underscores;
-password is 15–128 characters with no composition rule. Email is required for both roles.
+password is 8–128 characters with no composition rule. Email is required for both roles.
 
 The persistent credential is an opaque Data Protection ticket, not a JWT. Send it as
 `Authorization: Bearer <credential>`. It has no fixed expiration by product decision.

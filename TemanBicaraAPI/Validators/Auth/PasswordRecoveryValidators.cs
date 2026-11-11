@@ -26,7 +26,7 @@ public sealed class ResetPasswordValidator : AbstractValidator<ResetPasswordRequ
     public ResetPasswordValidator()
     {
         RuleFor(value => value.ResetToken).NotEmpty().Matches("^[A-F0-9]{64}$");
-        RuleFor(value => value.Password).NotEmpty().MaximumLength(128);
+        RuleFor(value => value.Password).NotEmpty().MinimumLength(8).MaximumLength(128);
         RuleFor(value => value.ConfirmPassword).NotEmpty().Equal(value => value.Password)
             .WithErrorCode("password_mismatch").WithMessage("Konfirmasi password tidak sama.");
     }

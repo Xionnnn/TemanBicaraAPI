@@ -62,10 +62,9 @@ duplicate definitions.
 
 ## Password and account behavior
 
-New passwords use ASP.NET Core `PasswordHasher`. Validation matches the current
-registration implementation: nonblank, up to 128 characters, with matching
-confirmation. The temporary one-character minimum already used for registration
-is preserved; this change does not restore the earlier 15-character policy.
+New passwords use ASP.NET Core `PasswordHasher`. Validation matches
+registration: 8 to 128 characters, not whitespace-only, with matching
+confirmation.
 
 Existing bearer credentials fail after a reset because the password stamp changes
 and `auth_version` increments. The user signs in again with the new password;
