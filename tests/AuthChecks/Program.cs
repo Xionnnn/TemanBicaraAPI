@@ -58,7 +58,8 @@ if (args.Contains("--live-schema"))
     await liveDb.Users.Select(u => u.Id).Take(1).ToListAsync();
     await liveDb.Users.Select(u => new { u.AuthVersion, u.EmailVerifiedAt, u.VerificationAttempts,
         u.VerificationExpiresAt, u.VerificationSentAt, u.VerificationCodeHash }).Take(1).ToListAsync();
-    Console.WriteLine("PASS: read-only EF mapping checks against all eight live public tables and authentication columns.");
+    await liveDb.PasswordResetChallenges.Select(challenge => challenge.Id).Take(1).ToListAsync();
+    Console.WriteLine("PASS: read-only EF mapping checks against all eight original public tables, authentication columns, and password recovery storage.");
     return;
 }
 
@@ -197,6 +198,24 @@ await using (var app = builder.Build())
     Check((await me.Content.ReadFromJsonAsync<AccountDto>())!.Id == signedIn.Account.Id, "HTTP me identity mismatch");
     Check((await http.PostAsync("/auth/logout", null)).StatusCode == HttpStatusCode.NoContent, "HTTP logout failed");
     Check((await http.GetAsync("/auth/me")).StatusCode == HttpStatusCode.Unauthorized, "Logged out HTTP credential accepted");
+    http.DefaultRequestHeaders.Authorization = null;
+    var unknownRecovery = await http.PostAsJsonAsync("/auth/forgot-password", new ForgotPasswordRequest("missing@example.test"));
+    Check(unknownRecovery.StatusCode == HttpStatusCode.NotFound &&
+        (await unknownRecovery.Content.ReadAsStringAsync()).Contains("email_not_found"), "Unknown recovery email contract changed");
+    var recoveryRequest = await http.PostAsJsonAsync("/auth/forgot-password", new ForgotPasswordRequest("http@example.test"));
+    Check(recoveryRequest.StatusCode == HttpStatusCode.Accepted, "HTTP recovery request failed");
+    var recoveryResponse = (await recoveryRequest.Content.ReadFromJsonAsync<PasswordRecoveryResponse>())!;
+    var recoveryVerified = await http.PostAsJsonAsync("/auth/verify-password-reset",
+        new VerifyPasswordResetRequest(recoveryResponse.RecoveryTicket, email.LastCode!));
+    Check(recoveryVerified.StatusCode == HttpStatusCode.OK, "HTTP recovery verification failed");
+    var recoveryGrant = (await recoveryVerified.Content.ReadFromJsonAsync<PasswordResetGrant>())!;
+    const string replacementPassword = "replacement HTTP password";
+    Check((await http.PostAsJsonAsync("/auth/reset-password", new ResetPasswordRequest(recoveryGrant.ResetToken,
+        replacementPassword, replacementPassword))).StatusCode == HttpStatusCode.NoContent, "HTTP password reset failed");
+    Check((await http.PostAsJsonAsync("/auth/login", new LoginRequest("http_student", password))).StatusCode == HttpStatusCode.Unauthorized,
+        "HTTP reset preserved the old password");
+    Check((await http.PostAsJsonAsync("/auth/login", new LoginRequest("http_student", replacementPassword))).StatusCode == HttpStatusCode.OK,
+        "HTTP reset rejected the new password");
     await app.StopAsync();
 }
 using (var smtpTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
@@ -205,7 +224,7 @@ using (var smtpTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
     listener.Start();
     try
     {
-        var captured = Task.Run(async () =>
+        Task<string> CaptureEmail() => Task.Run(async () =>
         {
             using var socket = await listener.AcceptTcpClientAsync(smtpTimeout.Token);
             await using var stream = socket.GetStream();
@@ -231,8 +250,15 @@ using (var smtpTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
             ["Smtp:Host"] = "127.0.0.1", ["Smtp:Port"] = ((IPEndPoint)listener.LocalEndpoint).Port.ToString(),
             ["Smtp:Security"] = "None", ["Smtp:From"] = "TemanBicara <noreply@example.test>"
         }).Build();
+        var captured = CaptureEmail();
         await new VerificationEmail(mailConfig).Send("student@example.test", "123456", smtpTimeout.Token);
         Check((await captured).Contains("123456", StringComparison.Ordinal), "MailKit SMTP code was not delivered to the local capture server");
+        var recoveryCaptured = CaptureEmail();
+        await new VerificationEmail(mailConfig).SendPasswordReset("student@example.test", "654321", smtpTimeout.Token);
+        var recoveryMessage = await recoveryCaptured;
+        Check(recoveryMessage.Contains("654321", StringComparison.Ordinal) &&
+            recoveryMessage.Contains("Kode pemulihan password TemanBicara", StringComparison.Ordinal),
+            "MailKit recovery subject or code was not delivered to the local capture server");
     }
     finally { listener.Stop(); }
 }
@@ -305,6 +331,7 @@ var oldTicket = DataProtectionProvider.Create(new DirectoryInfo(keyRing))
     .Protect(System.Text.Json.JsonSerializer.Serialize(new { UserId = raceUser.Id, ExpiresAt = clock.GetUtcNow().AddMinutes(30) }));
 Check(protector.ReadVerification(oldTicket) == raceUser.Id, "Pre-migration verification payload was rejected");
 
+assertions += await PasswordRecoveryChecks.Run(service, db, email, clock, hasher, protector, config);
 Console.WriteLine($"PASS: {assertions} PostgreSQL/handler/HTTP/SMTP assertions (dedicated local database).");
 
 sealed class TestClock : TimeProvider
@@ -317,6 +344,7 @@ sealed class CapturedEmail : IVerificationEmail
 {
     public string? LastCode;
     public bool Fail;
+    public Task SendPasswordReset(string email, string code, CancellationToken ct) => Send(email, code, ct);
     public Task Send(string email, string code, CancellationToken ct) {
         if (Fail) throw new IOException("Simulated SMTP failure");
         LastCode = code; return Task.CompletedTask;
@@ -350,6 +378,7 @@ static class TestServices
         services.AddSingleton(clock);
         services.AddScoped<CredentialAuthentication>();
         services.AddScoped<VerificationCodes>();
+        services.AddScoped<PasswordRecovery>();
         services.AddMediatR(c => {
             c.RegisterServicesFromAssembly(typeof(TemanBicaraAPI.AssemblyMarker).Assembly);
             c.AddOpenBehavior(typeof(ValidationBehavior<,>));
@@ -389,6 +418,14 @@ sealed class HandlerClient : IAsyncDisposable
         await scope.ServiceProvider.GetRequiredService<IMediator>().Send(request, ct);
     }
     public Task<VerificationResponse> Resend(string ticket, CancellationToken ct) => Send(new ResendRequest(ticket), ct);
+    public Task<PasswordRecoveryResponse> ForgotPassword(string email, CancellationToken ct = default) => Send(new ForgotPasswordRequest(email), ct);
+    public Task<PasswordResetGrant> VerifyPasswordReset(string ticket, string code, CancellationToken ct = default) =>
+        Send(new VerifyPasswordResetRequest(ticket, code), ct);
+    public async Task ResetPassword(string token, string password, string confirmation, CancellationToken ct = default)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IMediator>().Send(new ResetPasswordRequest(token, password, confirmation), ct);
+    }
     public async Task<(UserAccount User, AuthTicket Ticket)> Authenticate(string value, CancellationToken ct)
     {
         await using var scope = provider.CreateAsyncScope();

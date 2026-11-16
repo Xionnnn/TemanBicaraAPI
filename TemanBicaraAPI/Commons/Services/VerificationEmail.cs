@@ -7,7 +7,13 @@ namespace TemanBicaraAPI.Commons.Services;
 
 public sealed class VerificationEmail(IConfiguration config) : IVerificationEmail
 {
-    public async Task Send(string email, string code, CancellationToken ct)
+    public Task Send(string email, string code, CancellationToken ct) =>
+        SendCode(email, code, "Kode verifikasi TemanBicara", ct);
+
+    public Task SendPasswordReset(string email, string code, CancellationToken ct) =>
+        SendCode(email, code, "Kode pemulihan password TemanBicara", ct);
+
+    private async Task SendCode(string email, string code, string subject, CancellationToken ct)
     {
         var host = config["Smtp:Host"];
         var from = config["Smtp:From"];
@@ -16,7 +22,7 @@ public sealed class VerificationEmail(IConfiguration config) : IVerificationEmai
         var message = new MimeMessage();
         message.From.Add(MailboxAddress.Parse(from));
         message.To.Add(MailboxAddress.Parse(email));
-        message.Subject = "Kode verifikasi TemanBicara";
+        message.Subject = subject;
         message.Body = new TextPart("plain") { Text = $"Kode verifikasi Anda: {code}\n\nKode berlaku selama 10 menit. Jangan bagikan kode ini." };
         using var smtp = new SmtpClient();
         var security = Enum.Parse<SecureSocketOptions>(config["Smtp:Security"] ?? "StartTls", true);
